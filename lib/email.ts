@@ -75,9 +75,6 @@ export async function sendVerificationEmail({
           <a href="${verificationLink}" style="display:inline-block;padding:14px 20px;border-radius:16px;background:#d4af37;color:#060606;text-decoration:none;font-weight:700;">
             Review verification
           </a>
-          <p style="margin:24px 0 0;font-size:13px;line-height:1.7;color:rgba(246,231,191,0.55);word-break:break-all;">
-            ${verificationLink}
-          </p>
         </div>
       </div>
     `,

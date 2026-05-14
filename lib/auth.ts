@@ -59,24 +59,14 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      console.log("Better Auth is sending verification email to:", user.email);
-
-      const parsedUrl = new URL(url);
-      const token = parsedUrl.searchParams.get("token");
-      const callbackURL = parsedUrl.searchParams.get("callbackURL") ?? "/feed";
-
-      if (!token) {
-        throw new Error(
-          "Verification token was not included in the email URL.",
-        );
-      }
+      console.log("Better Auth callback fired:", { email: user.email, url });
 
       await sendVerificationEmail({
         to: user.email,
-        verificationLink: buildVerificationChoiceUrl(token, callbackURL),
+        verificationLink: url,
       });
 
-      console.log("Verification email sent to:", user.email);
+      console.log("Custom verification email sent:", user.email);
     },
     autoSignInAfterVerification: true,
     sendOnSignUp: true,

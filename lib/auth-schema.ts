@@ -1,5 +1,12 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  index,
+  integer,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -73,9 +80,33 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+export const userSubscription = pgTable("user_subscription", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  planId: text("plan_id"),
+  billingPeriod: text("billing_period"),
+  status: text("status").default("inactive").notNull(),
+  amount: integer("amount"),
+  dailyMessageLimit: integer("daily_message_limit"),
+  messagesUsedToday: integer("messages_used_today").default(0).notNull(),
+  messagesResetAt: timestamp("messages_reset_at"),
+  currentPeriodStart: timestamp("current_period_start"),
+  nextPaymentDate: timestamp("next_payment_date"),
+  cashfreeOrderId: text("cashfree_order_id"),
+  cashfreeOrderStatus: text("cashfree_order_status"),
+  lastPaymentAt: timestamp("last_payment_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  subscriptions: many(userSubscription),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -91,3 +122,13 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const userSubscriptionRelations = relations(
+  userSubscription,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [userSubscription.userId],
+      references: [user.id],
+    }),
+  }),
+);

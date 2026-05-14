@@ -27,15 +27,37 @@ export function AuthCard({ googleEnabled }: AuthCardProps) {
     setErrorMessage(null);
 
     startTransition(async () => {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (isSignup) {
+        const emailExistsResponse = await fetch(
+          `/api/auth/email-exists?email=${encodeURIComponent(normalizedEmail)}`,
+        );
+
+        if (!emailExistsResponse.ok) {
+          setErrorMessage("Could not validate this email address right now.");
+          return;
+        }
+
+        const emailExistsResult = (await emailExistsResponse.json()) as {
+          exists: boolean;
+        };
+
+        if (emailExistsResult.exists) {
+          setErrorMessage("An account already exists using this email id.");
+          return;
+        }
+      }
+
       const result = isSignup
         ? await authClient.signUp.email({
             name: "anonymous",
-            email,
+            email: normalizedEmail,
             password,
             callbackURL: "/feed",
           })
         : await authClient.signIn.email({
-            email,
+            email: normalizedEmail,
             password,
             callbackURL: "/feed",
             rememberMe,
@@ -46,7 +68,11 @@ export function AuthCard({ googleEnabled }: AuthCardProps) {
         return;
       }
 
-      router.push(isSignup ? `/check-email?email=${encodeURIComponent(email)}` : "/feed");
+      router.push(
+        isSignup
+          ? `/check-email?email=${encodeURIComponent(normalizedEmail)}`
+          : "/feed",
+      );
       router.refresh();
     });
   };
