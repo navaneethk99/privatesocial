@@ -62,7 +62,7 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
   return (
     <main className="min-h-screen bg-[#060606] px-6 py-10 text-[#f6e7bf]">
       {shouldShowPlanPopup ? <PlanPopup /> : null}
-      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+      <div className="mx-auto flex flex-col gap-8">
         {paymentMessage ? (
           <section
             className={`rounded-[1.5rem] border px-6 py-4 text-sm ${

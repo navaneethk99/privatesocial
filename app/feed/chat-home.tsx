@@ -496,7 +496,7 @@ export function ChatHome({
     chatState === "matched" && !isSending && quota.messagesRemaining > 0;
 
   return (
-    <div className="mx-auto flex flex-col gap-8">
+    <div className="mx-auto flex flex-col gap-8 w-full">
       <header className="rounded-[1.75rem] border border-[#d4af37]/16 bg-[#0d0b08] p-8 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
@@ -504,9 +504,7 @@ export function ChatHome({
               Private<p className="text-[#d4af37]">Social</p>
             </h1>
             <p className="mt-3 text-sm leading-7 text-[#f6e7bf]/62">
-              Match with a random person who is online, exchange ephemeral keys
-              in the browser, and keep the server limited to ciphertext relay
-              only.
+              Match with a random person who is online, no strings attached.
             </p>
           </div>
 
@@ -531,28 +529,33 @@ export function ChatHome({
               <div className="absolute left-10 top-10 h-28 w-28 rounded-full border border-[#d4af37]/12" />
               <div className="absolute bottom-10 right-10 h-40 w-40 rounded-full border border-[#d4af37]/10" />
 
-              <div className="relative z-10 ">
-                <p className="text-xs uppercase tracking-[0.34em] text-[#d4af37]/72">
+              <div className="relative z-10 flex flex-col">
+                {/*<p className="text-xs uppercase tracking-[0.34em] text-[#d4af37]/72">
                   Private Social
-                </p>
-                <h2 className="mt-5 text-5xl font-medium tracking-[-0.08em] text-[#f8edd0] sm:text-6xl">
+                </p>*/}
+                {/*<h2 className="mt-5 text-5xl font-medium tracking-[-0.08em] text-[#f8edd0] sm:text-6xl">
                   Join anonymously
-                </h2>
-                <p className="mx-auto mt-5 text-sm leading-7 text-[#f6e7bf]/62">
+                </h2>*/}
+                {/*<p className="mx-auto mt-5 text-sm leading-7 text-[#f6e7bf]/62">
                   When you join, the client opens a websocket, waits in a live
                   random queue, and only starts messaging after an end-to-end
                   encrypted room is created with another active visitor.
-                </p>
+                </p>*/}
 
                 <button
                   type="button"
                   onClick={handleJoin}
-                  className="mt-10 inline-flex min-h-24 items-center justify-center rounded-[1.75rem] bg-[#d4af37] px-10 text-2xl font-semibold tracking-[-0.04em] text-black shadow-[0_20px_60px_rgba(212,175,55,0.28)] transition hover:scale-[1.01] hover:bg-[#e2c15a]"
+                  className="inline-flex mb-4 min-h-24 items-center justify-center rounded-[1.75rem] bg-[#d4af37] px-10 text-2xl font-semibold tracking-[-0.04em] text-black shadow-[0_20px_60px_rgba(212,175,55,0.28)] transition hover:scale-[1.01] hover:bg-[#e2c15a]"
                 >
                   Join Anonymously
                 </button>
-
-                <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-xs uppercase tracking-[0.22em] text-[#f6e7bf]/48">
+                <span className="mb-1 rounded-full border border-[#d4af37]/12 px-3 py-2">
+                  {quota.messagesRemaining} texts left today
+                </span>
+                <p className="text-sm  text-[#f6e7bf]/42">
+                  Resets {messagesResetAtLabel}
+                </p>
+                {/*<div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-xs uppercase tracking-[0.22em] text-[#f6e7bf]/48">
                   <span className="rounded-full border border-[#d4af37]/12 px-3 py-2">
                     {planName}
                   </span>
@@ -569,7 +572,7 @@ export function ChatHome({
                 <p className="mt-4 text-xs uppercase tracking-[0.22em] text-[#f6e7bf]/42">
                   {quota.messagesUsedToday}/{quota.dailyMessageLimit} used
                   today • resets {messagesResetAtLabel}
-                </p>
+                </p>*/}
               </div>
             </div>
           ) : (
