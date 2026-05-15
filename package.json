@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node server.mjs dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.mjs start",
     "lint": "eslint"
   },
   "dependencies": {
@@ -15,7 +15,8 @@
     "next": "16.2.6",
     "nodemailer": "^8.0.7",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
