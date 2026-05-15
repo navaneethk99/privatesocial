@@ -55,12 +55,6 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
   const activeSubscription = await getActivePaidSubscription(session.user.id);
   const messageQuota = await getUserMessageQuota(session.user.id);
   const shouldShowPlanPopup = !activeSubscription;
-  const activePlanLabel = activeSubscription
-    ? `${activeSubscription.planId} (${activeSubscription.billingPeriod})`
-    : null;
-  const nextPaymentDateLabel = activeSubscription?.nextPaymentDate
-    ? activeSubscription.nextPaymentDate.toLocaleDateString("en-IN")
-    : null;
   const messagesResetAtLabel = messageQuota.messagesResetAt
     ? messageQuota.messagesResetAt.toLocaleString("en-IN")
     : "Every 24 hours after upgrade";
@@ -81,17 +75,11 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
           </section>
         ) : null}
         <ChatHome
-          userName={session.user.name}
-          userEmail={session.user.email}
-          userId={session.user.id}
-          sessionId={session.session.id}
           planName={messageQuota.planName}
           dailyMessageLimit={messageQuota.dailyMessageLimit}
           messagesUsedToday={messageQuota.messagesUsedToday}
           messagesRemaining={messageQuota.messagesRemaining}
           messagesResetAtLabel={messagesResetAtLabel}
-          activePlanLabel={activePlanLabel}
-          nextPaymentDateLabel={nextPaymentDateLabel}
         />
       </div>
     </main>

@@ -5,20 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import { SignOutButton } from "./sign-out-button";
 
 type ChatHomeProps = {
-  userName: string;
-  userEmail: string;
-  userId: string;
-  sessionId: string;
   planName: string;
   dailyMessageLimit: number;
   messagesUsedToday: number;
   messagesRemaining: number;
   messagesResetAtLabel: string;
-  activePlanLabel: string | null;
-  nextPaymentDateLabel: string | null;
 };
 
-type ChatState = "idle" | "joining" | "searching" | "matched" | "disconnected" | "error";
+type ChatState =
+  | "idle"
+  | "joining"
+  | "searching"
+  | "matched"
+  | "disconnected"
+  | "error";
 
 type ChatMessage = {
   id: string;
@@ -109,7 +109,10 @@ async function importPeerPublicKey(publicKey: string) {
   );
 }
 
-async function deriveSharedKey(privateKey: CryptoKey, peerPublicKey: CryptoKey) {
+async function deriveSharedKey(
+  privateKey: CryptoKey,
+  peerPublicKey: CryptoKey,
+) {
   return window.crypto.subtle.deriveKey(
     {
       name: "ECDH",
@@ -143,7 +146,11 @@ async function encryptMessage(sharedKey: CryptoKey, plaintext: string) {
   };
 }
 
-async function decryptMessage(sharedKey: CryptoKey, ciphertext: string, iv: string) {
+async function decryptMessage(
+  sharedKey: CryptoKey,
+  ciphertext: string,
+  iv: string,
+) {
   const decrypted = await window.crypto.subtle.decrypt(
     {
       name: "AES-GCM",
@@ -157,22 +164,21 @@ async function decryptMessage(sharedKey: CryptoKey, ciphertext: string, iv: stri
 }
 
 export function ChatHome({
-  userName,
-  userEmail,
-  userId,
-  sessionId,
   planName,
   dailyMessageLimit,
   messagesUsedToday,
   messagesRemaining,
   messagesResetAtLabel,
-  activePlanLabel,
-  nextPaymentDateLabel,
 }: ChatHomeProps) {
   const [chatState, setChatState] = useState<ChatState>("idle");
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [quota, setQuota] = useState({
+    dailyMessageLimit,
+    messagesRemaining,
+    messagesUsedToday,
+  });
   const [statusText, setStatusText] = useState(
     "Join anonymously to be matched with a random person who is online now.",
   );
@@ -236,12 +242,18 @@ export function ChatHome({
       if (!keyPair) {
         setChatState("error");
         setStatusText("Key exchange failed before the room was established.");
-        appendMessage("system", "The anonymous room could not finish the encryption handshake.");
+        appendMessage(
+          "system",
+          "The anonymous room could not finish the encryption handshake.",
+        );
         return;
       }
 
       const peerPublicKey = await importPeerPublicKey(message.peerPublicKey);
-      sharedKeyRef.current = await deriveSharedKey(keyPair.privateKey, peerPublicKey);
+      sharedKeyRef.current = await deriveSharedKey(
+        keyPair.privateKey,
+        peerPublicKey,
+      );
       setChatState("matched");
       setStatusText(
         "Matched. Messages are relayed over websocket and decrypted only in each browser.",
@@ -281,15 +293,22 @@ export function ChatHome({
     if (message.type === "peer-left") {
       sharedKeyRef.current = null;
       setChatState("disconnected");
-      setStatusText("The other person left. Join again to get a new random match.");
-      appendMessage("system", "Your anonymous peer disconnected. No transcript was saved.");
+      setStatusText(
+        "The other person left. Join again to get a new random match.",
+      );
+      appendMessage(
+        "system",
+        "Your anonymous peer disconnected. No transcript was saved.",
+      );
       return;
     }
 
     if (message.type === "idle") {
       sharedKeyRef.current = null;
       setChatState("idle");
-      setStatusText("Join anonymously to be matched with a random person who is online now.");
+      setStatusText(
+        "Join anonymously to be matched with a random person who is online now.",
+      );
       setMessages([]);
       return;
     }
@@ -306,7 +325,9 @@ export function ChatHome({
       setMessages([]);
       setDraft("");
       setChatState("joining");
-      setStatusText("Opening websocket and preparing an end-to-end encrypted room...");
+      setStatusText(
+        "Opening websocket and preparing an end-to-end encrypted room...",
+      );
 
       const ticketResponse = await fetch("/api/chat/socket-ticket", {
         method: "POST",
@@ -320,7 +341,9 @@ export function ChatHome({
         | undefined;
 
       if (!ticketResponse.ok || !ticketPayload?.ticket) {
-        throw new Error(ticketPayload?.message ?? "Could not create a websocket ticket.");
+        throw new Error(
+          ticketPayload?.message ?? "Could not create a websocket ticket.",
+        );
       }
 
       const keyPair = await createKeyPair();
@@ -355,7 +378,9 @@ export function ChatHome({
         }
 
         setChatState("disconnected");
-        setStatusText("The websocket closed. Join again to find another anonymous partner.");
+        setStatusText(
+          "The websocket closed. Join again to find another anonymous partner.",
+        );
       });
 
       socket.addEventListener("error", () => {
@@ -366,7 +391,9 @@ export function ChatHome({
       resetConnection();
       setChatState("error");
       setStatusText(
-        error instanceof Error ? error.message : "Anonymous join failed to start.",
+        error instanceof Error
+          ? error.message
+          : "Anonymous join failed to start.",
       );
     }
   };
@@ -384,7 +411,9 @@ export function ChatHome({
 
     resetConnection();
     setChatState("idle");
-    setStatusText("Join anonymously to be matched with a random person who is online now.");
+    setStatusText(
+      "Join anonymously to be matched with a random person who is online now.",
+    );
     setMessages([]);
     setDraft("");
   };
@@ -410,6 +439,37 @@ export function ChatHome({
 
     try {
       const encryptedMessage = await encryptMessage(sharedKey, message);
+      const quotaResponse = await fetch("/api/chat/messages", {
+        method: "POST",
+      });
+      const quotaPayload = (await quotaResponse.json()) as
+        | {
+            dailyMessageLimit?: number;
+            message?: string;
+            messagesRemaining?: number;
+            messagesUsedToday?: number;
+          }
+        | undefined;
+
+      if (
+        typeof quotaPayload?.dailyMessageLimit === "number" &&
+        typeof quotaPayload?.messagesRemaining === "number" &&
+        typeof quotaPayload?.messagesUsedToday === "number"
+      ) {
+        setQuota({
+          dailyMessageLimit: quotaPayload.dailyMessageLimit,
+          messagesRemaining: quotaPayload.messagesRemaining,
+          messagesUsedToday: quotaPayload.messagesUsedToday,
+        });
+      }
+
+      if (!quotaResponse.ok) {
+        appendMessage(
+          "system",
+          quotaPayload?.message ?? "This message could not be sent.",
+        );
+        return;
+      }
 
       websocket.send(
         JSON.stringify({
@@ -422,47 +482,48 @@ export function ChatHome({
       appendMessage("self", message);
       setDraft("");
     } catch {
-      appendMessage("system", "This message could not be encrypted and was not sent.");
+      appendMessage(
+        "system",
+        "This message could not be encrypted and was not sent.",
+      );
     } finally {
       setIsSending(false);
     }
   };
 
   const isInChatWindow = chatState !== "idle";
-  const canSend = chatState === "matched" && !isSending;
+  const canSend =
+    chatState === "matched" && !isSending && quota.messagesRemaining > 0;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex flex-col gap-8">
       <header className="rounded-[1.75rem] border border-[#d4af37]/16 bg-[#0d0b08] p-8 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-sm uppercase tracking-[0.28em] text-[#d4af37]/78">
-              Access granted
-            </p>
-            <h1 className="mt-3 text-4xl font-medium tracking-[-0.05em] text-[#f8edd0]">
-              Anonymous messaging starts here
+            <h1 className="text-4xl flex font-medium tracking-[-0.05em] text-[#f8edd0]">
+              Private<p className="text-[#d4af37]">Social</p>
             </h1>
             <p className="mt-3 text-sm leading-7 text-[#f6e7bf]/62">
-              Match with a random person who is online, exchange ephemeral
-              keys in the browser, and keep the server limited to ciphertext
-              relay only.
+              Match with a random person who is online, exchange ephemeral keys
+              in the browser, and keep the server limited to ciphertext relay
+              only.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-[#d4af37]/16 bg-black/25 px-4 py-2 text-xs uppercase tracking-[0.24em] text-[#f6e7bf]/62">
+            {/*<span className="rounded-full border border-[#d4af37]/16 bg-black/25 px-4 py-2 text-xs uppercase tracking-[0.24em] text-[#f6e7bf]/62">
               {chatState === "matched"
                 ? "Anonymous link active"
                 : chatState === "searching" || chatState === "joining"
                   ? "Searching for match"
                   : "Waiting to join"}
-            </span>
+            </span>*/}
             <SignOutButton />
           </div>
         </div>
       </header>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.8fr)]">
+      <section className="">
         <div className="overflow-hidden rounded-[2rem] border border-[#d4af37]/14 bg-[#0b0907] shadow-[0_24px_80px_rgba(0,0,0,0.4)]">
           {!isInChatWindow ? (
             <div className="relative flex min-h-[640px] flex-col items-center justify-center overflow-hidden px-8 py-12 text-center">
@@ -470,14 +531,14 @@ export function ChatHome({
               <div className="absolute left-10 top-10 h-28 w-28 rounded-full border border-[#d4af37]/12" />
               <div className="absolute bottom-10 right-10 h-40 w-40 rounded-full border border-[#d4af37]/10" />
 
-              <div className="relative z-10 max-w-2xl">
+              <div className="relative z-10 ">
                 <p className="text-xs uppercase tracking-[0.34em] text-[#d4af37]/72">
                   Private Social
                 </p>
                 <h2 className="mt-5 text-5xl font-medium tracking-[-0.08em] text-[#f8edd0] sm:text-6xl">
                   Join anonymously
                 </h2>
-                <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-[#f6e7bf]/62">
+                <p className="mx-auto mt-5 text-sm leading-7 text-[#f6e7bf]/62">
                   When you join, the client opens a websocket, waits in a live
                   random queue, and only starts messaging after an end-to-end
                   encrypted room is created with another active visitor.
@@ -496,12 +557,19 @@ export function ChatHome({
                     {planName}
                   </span>
                   <span className="rounded-full border border-[#d4af37]/12 px-3 py-2">
+                    {quota.messagesRemaining} texts left
+                  </span>
+                  <span className="rounded-full border border-[#d4af37]/12 px-3 py-2">
                     websocket relay
                   </span>
                   <span className="rounded-full border border-[#d4af37]/12 px-3 py-2">
                     no stored transcripts
                   </span>
                 </div>
+                <p className="mt-4 text-xs uppercase tracking-[0.22em] text-[#f6e7bf]/42">
+                  {quota.messagesUsedToday}/{quota.dailyMessageLimit} used
+                  today • resets {messagesResetAtLabel}
+                </p>
               </div>
             </div>
           ) : (
@@ -509,27 +577,34 @@ export function ChatHome({
               <div className="border-b border-[#d4af37]/12 bg-[#120f0c] px-6 py-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.28em] text-[#d4af37]/72">
+                    {/*<p className="text-xs uppercase tracking-[0.28em] text-[#d4af37]/72">
                       Anonymous room
-                    </p>
+                    </p>*/}
                     <h2 className="mt-2 text-2xl font-medium tracking-[-0.05em] text-[#f8edd0]">
                       {chatState === "matched"
                         ? "Matched with a random active user"
                         : "Waiting for a random active user"}
                     </h2>
-                    <p className="mt-2 text-sm text-[#f6e7bf]/58">{statusText}</p>
+                    <p className="mt-2 text-sm text-[#f6e7bf]/58">
+                      {quota.messagesRemaining} texts left on {planName}. Resets{" "}
+                      {messagesResetAtLabel}.
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    <span className="rounded-full border border-[#d4af37]/18 bg-black/24 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#f6e7bf]/68">
+                    {/*<span className="rounded-full border border-[#d4af37]/18 bg-black/24 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#f6e7bf]/68">
                       {chatState}
-                    </span>
+                    </span>*/}
                     <button
                       type="button"
-                      onClick={chatState === "matched" ? handleLeave : handleJoin}
+                      onClick={
+                        chatState === "matched" ? handleLeave : handleJoin
+                      }
                       className="rounded-full border border-[#d4af37]/20 bg-black/20 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#f6e7bf] transition hover:border-[#d4af37]/38 hover:bg-black/30"
                     >
-                      {chatState === "matched" ? "Leave room" : "Find new match"}
+                      {chatState === "matched"
+                        ? "Leave room"
+                        : "Find new match"}
                     </button>
                   </div>
                 </div>
@@ -542,8 +617,8 @@ export function ChatHome({
                 {messages.length === 0 ? (
                   <div className="flex h-full items-center justify-center">
                     <div className="max-w-md rounded-[1.5rem] border border-[#d4af37]/12 bg-[#17130f] px-5 py-4 text-center text-sm leading-7 text-[#f6e7bf]/62">
-                      No transcript is persisted. This window only shows the
-                      current in-memory conversation for this anonymous room.
+                      Your messages are end-to-end encrypted and not saved
+                      anywhere. Feel free to pour your wildest imaginations out.
                     </div>
                   </div>
                 ) : null}
@@ -564,7 +639,7 @@ export function ChatHome({
                       }`}
                     >
                       <div
-                        className={`max-w-[85%] rounded-[1.5rem] px-4 py-3 sm:max-w-[70%] ${
+                        className={` rounded-[1.5rem] px-4 py-3 ${
                           isSystem
                             ? "border border-[#d4af37]/10 bg-[#15110d] text-[#f6e7bf]/70"
                             : isSelf
@@ -600,7 +675,9 @@ export function ChatHome({
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder={
                       chatState === "matched"
-                        ? "Send an end-to-end encrypted message..."
+                        ? quota.messagesRemaining > 0
+                          ? "Send an end-to-end encrypted message..."
+                          : "Your daily message limit has been reached..."
                         : "Messaging unlocks when a random partner is matched..."
                     }
                     disabled={!canSend}
@@ -618,56 +695,6 @@ export function ChatHome({
             </div>
           )}
         </div>
-
-        <aside className="grid gap-4">
-          <div className="rounded-[1.5rem] border border-[#d4af37]/14 bg-[#0d0b08] p-6">
-            <p className="text-xs uppercase tracking-[0.24em] text-[#d4af37]/70">
-              Identity
-            </p>
-            <div className="mt-4 space-y-2 text-sm text-[#f6e7bf]/72">
-              <p>Name: {userName}</p>
-              <p>Email: {userEmail}</p>
-              <p>Anonymous ID: {userId}</p>
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-[#d4af37]/14 bg-[#0d0b08] p-6">
-            <p className="text-xs uppercase tracking-[0.24em] text-[#d4af37]/70">
-              Room rules
-            </p>
-            <div className="mt-4 space-y-2 text-sm text-[#f6e7bf]/72">
-              <p>Transport: websocket</p>
-              <p>Matchmaking: random online visitor</p>
-              <p>Encryption: browser-side ECDH + AES-GCM</p>
-              <p>Storage: no message persistence</p>
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-[#d4af37]/14 bg-[#0d0b08] p-6">
-            <p className="text-xs uppercase tracking-[0.24em] text-[#d4af37]/70">
-              Plan
-            </p>
-            <div className="mt-4 space-y-2 text-sm text-[#f6e7bf]/72">
-              <p>Message plan: {planName}</p>
-              <p>Daily limit: {dailyMessageLimit}</p>
-              <p>Remaining: {messagesRemaining}</p>
-              <p>Used today: {messagesUsedToday}</p>
-              <p>Resets: {messagesResetAtLabel}</p>
-              {activePlanLabel ? <p>Paid plan: {activePlanLabel}</p> : null}
-              {nextPaymentDateLabel ? <p>Next payment: {nextPaymentDateLabel}</p> : null}
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-[#d4af37]/14 bg-[#0d0b08] p-6">
-            <p className="text-xs uppercase tracking-[0.24em] text-[#d4af37]/70">
-              Session
-            </p>
-            <div className="mt-4 space-y-2 text-sm text-[#f6e7bf]/72">
-              <p>User ID: {userId}</p>
-              <p>Session ID: {sessionId}</p>
-            </div>
-          </div>
-        </aside>
       </section>
     </div>
   );

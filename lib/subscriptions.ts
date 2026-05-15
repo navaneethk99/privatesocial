@@ -21,6 +21,15 @@ type MessageQuotaState = {
   planName: string;
 };
 
+type MessageQuotaRecord = {
+  billingPeriod: BillingPeriod | null;
+  dailyMessageLimit: number | null;
+  messagesResetAt: Date | null;
+  messagesUsedToday: number;
+  planId: string | null;
+  status: string;
+};
+
 function isMissingSubscriptionTableError(error: unknown) {
   return (
     error instanceof Error &&
@@ -50,6 +59,115 @@ function addBillingPeriod(date: Date, billingPeriod: BillingPeriod) {
 
 function add24Hours(date: Date) {
   return new Date(date.getTime() + 24 * 60 * 60 * 1000);
+}
+
+async function ensureClassicQuota(userId: string) {
+  const now = new Date();
+  const classicPlan = getPlan("monthly", "classic");
+  const nextResetAt = add24Hours(now);
+
+  if (!classicPlan) {
+    throw new Error("Classic plan configuration is missing.");
+  }
+
+  await db
+    .insert(schema.userSubscription)
+    .values({
+      amount: classicPlan.amount,
+      billingPeriod: "monthly",
+      dailyMessageLimit: classicPlan.dailyMessageLimit,
+      messagesResetAt: nextResetAt,
+      messagesUsedToday: 0,
+      planId: "classic",
+      status: "active",
+      userId,
+    })
+    .onConflictDoUpdate({
+      target: schema.userSubscription.userId,
+      set: {
+        amount: classicPlan.amount,
+        billingPeriod: "monthly",
+        dailyMessageLimit: classicPlan.dailyMessageLimit,
+        messagesResetAt: nextResetAt,
+        planId: "classic",
+        status: "active" satisfies SubscriptionStatus,
+        updatedAt: now,
+      },
+    });
+
+  return {
+    billingPeriod: "monthly" as BillingPeriod,
+    dailyMessageLimit: classicPlan.dailyMessageLimit,
+    messagesResetAt: nextResetAt,
+    messagesUsedToday: 0,
+    planId: "classic",
+    status: "active",
+  };
+}
+
+async function getMessageQuotaRecord(userId: string): Promise<MessageQuotaRecord> {
+  await expireSubscriptionIfPastDue(userId);
+  await resetMessageQuotaIfDue(userId);
+
+  let subscription;
+
+  try {
+    subscription = await db.query.userSubscription.findFirst({
+      where: eq(schema.userSubscription.userId, userId),
+    });
+  } catch (error) {
+    if (isMissingSubscriptionTableError(error)) {
+      return {
+        billingPeriod: "monthly",
+        dailyMessageLimit: getPlan("monthly", "classic")?.dailyMessageLimit ?? 10,
+        messagesResetAt: null,
+        messagesUsedToday: 0,
+        planId: "classic",
+        status: "active",
+      };
+    }
+
+    throw error;
+  }
+
+  if (!subscription) {
+    return ensureClassicQuota(userId);
+  }
+
+  const isActivePaidPlan =
+    subscription.status === "active" &&
+    isBillingPeriod(subscription.billingPeriod ?? undefined) &&
+    isPlanId(subscription.planId ?? undefined) &&
+    subscription.planId !== "classic" &&
+    Boolean(subscription.nextPaymentDate);
+
+  if (isActivePaidPlan) {
+    return {
+      billingPeriod: subscription.billingPeriod as BillingPeriod,
+      dailyMessageLimit: subscription.dailyMessageLimit,
+      messagesResetAt: subscription.messagesResetAt ?? null,
+      messagesUsedToday: subscription.messagesUsedToday ?? 0,
+      planId: subscription.planId,
+      status: subscription.status,
+    };
+  }
+
+  if (
+    subscription.planId === "classic" &&
+    subscription.status === "active" &&
+    subscription.dailyMessageLimit
+  ) {
+    return {
+      billingPeriod: "monthly",
+      dailyMessageLimit: subscription.dailyMessageLimit,
+      messagesResetAt: subscription.messagesResetAt ?? null,
+      messagesUsedToday: subscription.messagesUsedToday ?? 0,
+      planId: "classic",
+      status: "active",
+    };
+  }
+
+  return ensureClassicQuota(userId);
 }
 
 export async function resetDueMessageQuotas() {
@@ -205,57 +323,36 @@ export async function getActivePaidSubscription(userId: string) {
 }
 
 export async function getUserMessageQuota(userId: string): Promise<MessageQuotaState> {
-  const activeSubscription = await getActivePaidSubscription(userId);
-
-  if (!activeSubscription || !activeSubscription.planId) {
-    const fallbackPlan = getPlan("monthly", "classic");
-
-    return {
-      dailyMessageLimit: fallbackPlan?.dailyMessageLimit ?? 10,
-      messagesRemaining: fallbackPlan?.dailyMessageLimit ?? 10,
-      messagesResetAt: null,
-      messagesUsedToday: 0,
-      planId: "classic",
-      planName: fallbackPlan?.name ?? "PrivateSocial Classic",
-    };
-  }
-
-  const activePlan = getPlan(
-    activeSubscription.billingPeriod as BillingPeriod,
-    activeSubscription.planId as PlanId,
-  );
+  const quotaRecord = await getMessageQuotaRecord(userId);
+  const billingPeriod = quotaRecord.billingPeriod ?? "monthly";
+  const planId: PlanId = isPlanId(quotaRecord.planId ?? undefined)
+    ? (quotaRecord.planId as PlanId)
+    : "classic";
+  const activePlan = getPlan(billingPeriod, planId);
   const dailyMessageLimit =
-    activeSubscription.dailyMessageLimit ??
+    quotaRecord.dailyMessageLimit ??
     activePlan?.dailyMessageLimit ??
     0;
-  const messagesUsedToday = activeSubscription.messagesUsedToday ?? 0;
+  const messagesUsedToday = quotaRecord.messagesUsedToday ?? 0;
 
   return {
     dailyMessageLimit,
     messagesRemaining: Math.max(dailyMessageLimit - messagesUsedToday, 0),
-    messagesResetAt: activeSubscription.messagesResetAt ?? null,
+    messagesResetAt: quotaRecord.messagesResetAt ?? null,
     messagesUsedToday,
-    planId: activeSubscription.planId as PlanId,
-    planName: activePlan?.name ?? activeSubscription.planId,
+    planId,
+    planName: activePlan?.name ?? planId,
   };
 }
 
 export async function incrementMessagesUsed(userId: string, count = 1) {
-  const activeSubscription = await getActivePaidSubscription(userId);
-
-  if (!activeSubscription || !activeSubscription.dailyMessageLimit) {
-    return {
-      allowed: true,
-      dailyMessageLimit: getPlan("monthly", "classic")?.dailyMessageLimit ?? 10,
-      messagesRemaining: getPlan("monthly", "classic")?.dailyMessageLimit ?? 10,
-      messagesUsedToday: 0,
-      tracked: false,
-    };
-  }
-
-  const currentUsed = activeSubscription.messagesUsedToday ?? 0;
+  const quotaRecord = await getMessageQuotaRecord(userId);
+  const dailyMessageLimit =
+    quotaRecord.dailyMessageLimit ??
+    getPlan("monthly", "classic")?.dailyMessageLimit ??
+    10;
+  const currentUsed = quotaRecord.messagesUsedToday ?? 0;
   const nextUsed = currentUsed + count;
-  const dailyMessageLimit = activeSubscription.dailyMessageLimit;
 
   if (nextUsed > dailyMessageLimit) {
     return {
